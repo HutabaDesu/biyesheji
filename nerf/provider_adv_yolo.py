@@ -13,39 +13,38 @@ from torch.utils.data import DataLoader
 
 from .utils import get_rays, create_dodecahedron_cameras
 
-
 def nerf_matrix_to_ngp(pose, scale=0.33, offset=[0, 0, 0]):
     pose[:3, 3] = pose[:3, 3] * scale + np.array(offset)
     pose = pose.astype(np.float32)
     return pose
 
-
 def pose_spherical(all_args):
+
     gamma, theta, phi, radius, x, y = all_args[0], all_args[1], all_args[2], all_args[3], all_args[4], all_args[5]
 
     trans_t = lambda t, x, y: torch.Tensor([
-        [1, 0, 0, x],
-        [0, 1, 0, y],
-        [0, 0, 1, t],
-        [0, 0, 0, 1]]).float()
+    [1, 0, 0, x],
+    [0, 1, 0, y],
+    [0, 0, 1, t],
+    [0, 0, 0, 1]]).float()
 
     rot_phi = lambda phi: torch.Tensor([
-        [1, 0, 0, 0],
-        [0, np.cos(phi), -np.sin(phi), 0],
-        [0, np.sin(phi), np.cos(phi), 0],
-        [0, 0, 0, 1]]).float()
+    [1, 0, 0, 0],
+    [0, np.cos(phi), -np.sin(phi), 0],
+    [0, np.sin(phi), np.cos(phi), 0],
+    [0, 0, 0, 1]]).float()
 
     rot_gamma = lambda gamma: torch.Tensor([
-        [np.cos(gamma), 0, -np.sin(gamma), 0],
-        [0, 1, 0, 0],
-        [np.sin(gamma), 0, np.cos(gamma), 0],
-        [0, 0, 0, 1]]).float()
+    [np.cos(gamma), 0, -np.sin(gamma), 0],
+    [0, 1, 0, 0],
+    [np.sin(gamma), 0, np.cos(gamma), 0],
+    [0, 0, 0, 1]]).float()
 
     rot_theta = lambda th: torch.Tensor([
-        [np.cos(th), -np.sin(th), 0, 0],
-        [np.sin(th), np.cos(th), 0, 0],
-        [0, 0, 1, 0],
-        [0, 0, 0, 1]]).float()
+    [np.cos(th), -np.sin(th), 0, 0],
+    [np.sin(th), np.cos(th), 0, 0],
+    [0, 0, 1, 0],
+    [0, 0, 0, 1]]).float()
 
     c2w = trans_t(radius, x, y)
     c2w = rot_phi(phi / 180. * np.pi) @ c2w
@@ -53,7 +52,6 @@ def pose_spherical(all_args):
     c2w = rot_theta(theta / 180. * np.pi) @ c2w
 
     return c2w
-
 
 def rand_poses(size, device, radius=1, theta_range=[60, 120], phi_range=[-60, 60], gamma_range=[-60, 60]):
     # generate random gamma, theta, phi, radius, x, and y
@@ -72,36 +70,35 @@ def rand_poses(size, device, radius=1, theta_range=[60, 120], phi_range=[-60, 60
 
     # convert list of poses to tensor
     poses = torch.stack(poses).to(device)
-
+    
     return poses
-
 
 class NeRFDataset:
     def __init__(self, opt, device, type='train', n_test=10):
         super().__init__()
-
+        
         self.opt = opt
         self.device = device
-        self.type = type  # train, val, test
+        self.type = type # train, val, test
         self.downscale = opt.downscale
         self.root_path = opt.path
-        self.preload = opt.preload  # preload data into GPU
-        self.scale = opt.scale  # camera radius scale to make sure camera are inside the bounding box.
-        self.offset = opt.offset  # camera offset
-        self.bound = opt.bound  # bounding box half length, also used as the radius to random sample poses.
-        self.fp16 = opt.fp16  # if preload, load into fp16.
+        self.preload = opt.preload # preload data into GPU
+        self.scale = opt.scale # camera radius scale to make sure camera are inside the bounding box.
+        self.offset = opt.offset # camera offset
+        self.bound = opt.bound # bounding box half length, also used as the radius to random sample poses.
+        self.fp16 = opt.fp16 # if preload, load into fp16.
 
         if self.scale == -1:
             print(f'[WARN] --data_format nerf cannot auto-choose --scale, use 1 as default.')
             self.scale = 1
-
+            
         self.training = self.type in ['train', 'all', 'trainval']
 
         # auto-detect transforms.json and split mode.
         if os.path.exists(os.path.join(self.root_path, 'transforms.json')):
-            self.mode = 'colmap'  # manually split, use view-interpolation for test.
+            self.mode = 'colmap' # manually split, use view-interpolation for test.
         elif os.path.exists(os.path.join(self.root_path, 'transforms_train.json')):
-            self.mode = 'blender'  # provided split
+            self.mode = 'blender' # provided split
         else:
             raise NotImplementedError(f'[NeRFDataset] Cannot find transforms*.json under {self.root_path}')
 
@@ -143,24 +140,23 @@ class NeRFDataset:
         else:
             # we have to actually read an image to get H and W later.
             self.H = self.W = None
-
+        
         # read images
         frames = np.array(transform["frames"])
-
+        
         # tmp: if time in frames (dynamic scene), only load time == 0
         if 'time' in frames[0]:
             frames = np.array([f for f in frames if f['time'] == 0])
             print(f'[INFO] selecting time == 0 frames: {len(transform["frames"])} --> {len(frames)}')
 
+
         # for colmap, manually interpolate a test set.
         if self.mode == 'colmap' and type == 'test':
-
+            
             # choose two random poses, and interpolate between.
             f0, f1 = np.random.choice(frames, 2, replace=False)
-            pose0 = nerf_matrix_to_ngp(np.array(f0['transform_matrix'], dtype=np.float32), scale=self.scale,
-                                       offset=self.offset)  # [4, 4]
-            pose1 = nerf_matrix_to_ngp(np.array(f1['transform_matrix'], dtype=np.float32), scale=self.scale,
-                                       offset=self.offset)  # [4, 4]
+            pose0 = nerf_matrix_to_ngp(np.array(f0['transform_matrix'], dtype=np.float32), scale=self.scale, offset=self.offset) # [4, 4]
+            pose1 = nerf_matrix_to_ngp(np.array(f1['transform_matrix'], dtype=np.float32), scale=self.scale, offset=self.offset) # [4, 4]
             rots = Rotation.from_matrix(np.stack([pose0[:3, :3], pose1[:3, :3]]))
             slerp = Slerp([0, 1], rots)
 
@@ -181,30 +177,30 @@ class NeRFDataset:
                 elif type == 'val':
                     frames = frames[:1]
                 # else 'all' or 'trainval' : use all frames
-
+            
             self.poses = []
             self.images = []
             for f in tqdm.tqdm(frames, desc=f'Loading {type} data'):
                 f_path = os.path.join(self.root_path, f['file_path'])
                 if self.mode == 'blender' and '.' not in os.path.basename(f_path):
-                    f_path += '.png'  # so silly...
+                    f_path += '.png' # so silly...
 
                 # there are non-exist paths in fox...
                 if not os.path.exists(f_path):
                     print(f'[WARN] {f_path} not exists!')
                     continue
-
-                pose = np.array(f['transform_matrix'], dtype=np.float32)  # [4, 4]
+                
+                pose = np.array(f['transform_matrix'], dtype=np.float32) # [4, 4]
                 pose[0][0] = pose[0][0] + 0.01
                 pose = nerf_matrix_to_ngp(pose, scale=self.scale, offset=self.offset)
 
-                image = cv2.imread(f_path, cv2.IMREAD_UNCHANGED)  # [H, W, 3] o [H, W, 4]
+                image = cv2.imread(f_path, cv2.IMREAD_UNCHANGED) # [H, W, 3] o [H, W, 4]
                 if self.H is None or self.W is None:
                     self.H = image.shape[0] // self.downscale
                     self.W = image.shape[1] // self.downscale
 
                 # add support for the alpha channel as a mask.
-                if image.shape[-1] == 3:
+                if image.shape[-1] == 3: 
                     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
                 else:
                     image = cv2.cvtColor(image, cv2.COLOR_BGRA2RGBA)
@@ -214,17 +210,16 @@ class NeRFDataset:
 
                 self.poses.append(pose)
                 self.images.append(image)
-
-        self.poses = torch.from_numpy(np.stack(self.poses, axis=0))  # [N, 4, 4]
+            
+        self.poses = torch.from_numpy(np.stack(self.poses, axis=0)) # [N, 4, 4]
         if self.images is not None:
-            self.images = torch.from_numpy(np.stack(self.images, axis=0).astype(np.uint8))  # [N, H, W, C]
-
+            self.images = torch.from_numpy(np.stack(self.images, axis=0).astype(np.uint8)) # [N, H, W, C]
+        
         # calculate mean radius of all camera poses
         self.radius = self.poses[:, :3, 3].norm(dim=-1).mean(0).item()
-        # print(f'[INFO] dataset camera poses: radius = {self.radius:.4f}, bound = {self.bound}')
-        self.poses_rnd = rand_poses(len(self.poses), self.device, self.radius, theta_range=[-180, 180],
-                                    phi_range=[-30, 30], gamma_range=[-30, 30])  # theta = roll
-
+        #print(f'[INFO] dataset camera poses: radius = {self.radius:.4f}, bound = {self.bound}')
+        self.poses_rnd = rand_poses(len(self.poses), self.device, self.radius, theta_range=[-180, 180], phi_range=[-30, 30], gamma_range=[-30, 30]) #theta = roll
+            
         # load intrinsics
         if 'fl_x' in transform or 'fl_y' in transform:
             fl_x = (transform['fl_x'] if 'fl_x' in transform else transform['fl_y']) / self.downscale
@@ -240,37 +235,35 @@ class NeRFDataset:
 
         cx = (transform['cx'] / self.downscale) if 'cx' in transform else (self.W / 2.0)
         cy = (transform['cy'] / self.downscale) if 'cy' in transform else (self.H / 2.0)
-
+    
         self.intrinsics = np.array([fl_x, fl_y, cx, cy])
 
         # perspective projection matrix
         self.near = self.opt.min_near
-        self.far = 1000  # infinite
+        self.far = 1000 # infinite
 
         y = self.H / (2.0 * fl_y)
 
-        aspect = self.W / self.H
-        self.projection = np.array([[1 / (y * aspect), 0, 0, 0],
-                                    [0, -1 / y, 0, 0],
-                                    [0, 0, -(self.far + self.near) / (self.far - self.near),
-                                     -(2 * self.far * self.near) / (self.far - self.near)],
+        aspect =  self.W / self.H
+        self.projection = np.array([[1/(y*aspect), 0, 0, 0], 
+                                    [0, -1/y, 0, 0],
+                                    [0, 0, -(self.far+self.near)/(self.far-self.near), -(2*self.far*self.near)/(self.far-self.near)],
                                     [0, 0, -1, 0]], dtype=np.float32)
 
         self.projection = torch.from_numpy(self.projection)
 
-        self.projection_rnd = np.array([[1 / (y * aspect), 0, 0, 0],
-                                        [0, -1 / y, 0, 0],
-                                        [0, 0, -(self.far + self.near) / (self.far - self.near),
-                                         -(2 * self.far * self.near) / (self.far - self.near)],
-                                        [0, 0, -1, 0]], dtype=np.float32)
+        self.projection_rnd = np.array([[1/(y*aspect), 0, 0, 0], 
+                            [0, -1/y, 0, 0],
+                            [0, 0, -(self.far+self.near)/(self.far-self.near), -(2*self.far*self.near)/(self.far-self.near)],
+                            [0, 0, -1, 0]], dtype=np.float32)
 
         self.projection_rnd = torch.from_numpy(self.projection_rnd)
         self.mvps_rnd = self.projection_rnd.unsqueeze(0) @ torch.inverse(self.poses_rnd.to('cpu'))
         self.mvps = self.projection.unsqueeze(0) @ torch.inverse(self.poses)
-
+    
         # tmp: dodecahedron_cameras for mesh visibility test
         dodecahedron_poses = create_dodecahedron_cameras()
-        self.dodecahedron_poses = torch.from_numpy(dodecahedron_poses.astype(np.float32))  # [N, 4, 4]
+        self.dodecahedron_poses = torch.from_numpy(dodecahedron_poses.astype(np.float32)) # [N, 4, 4]
         self.dodecahedron_mvps = self.projection.unsqueeze(0) @ torch.inverse(self.dodecahedron_poses)
 
         if self.preload:
@@ -281,9 +274,11 @@ class NeRFDataset:
             self.mvps = self.mvps.to(self.device)
             self.mvps_rnd = self.mvps_rnd.to(self.device)
 
+
+
     def collate(self, index):
 
-        B = len(index)  # a list of length 1
+        B = len(index) # a list of length 1
 
         results = {'H': self.H, 'W': self.W}
 
@@ -303,7 +298,7 @@ class NeRFDataset:
         else:
             # print('not random')
             results['ifrandom'] = 1
-            poses = self.poses[index].to(self.device)  # [N, 4, 4]
+            poses = self.poses[index].to(self.device) # [N, 4, 4]
             # print(poses[0])
         rays = get_rays(poses, self.intrinsics, self.H, self.W, num_rays, self.opt.patch_size)
 
@@ -319,24 +314,23 @@ class NeRFDataset:
             results['mvp'] = mvp
 
         if self.images is not None:
-
+            
             if self.training and self.opt.stage == 0:
-                images = self.images[index, rays['j'], rays['i']].float().to(self.device) / 255  # [N, 3/4]
+                images = self.images[index, rays['j'], rays['i']].float().to(self.device) / 255 # [N, 3/4]
             else:
-                images = self.images[index].squeeze(0).float().to(self.device) / 255  # [H, W, 3/4]
+                images = self.images[index].squeeze(0).float().to(self.device) / 255 # [H, W, 3/4]
 
             if self.training:
                 C = self.images.shape[-1]
                 images = images.view(-1, C)
 
             results['images'] = images
-
+            
         return results
 
     def dataloader(self):
         size = len(self.poses)
-        loader = DataLoader(list(range(size)), batch_size=1, collate_fn=self.collate, shuffle=self.training,
-                            num_workers=0)
-        loader._data = self  # an ugly fix... we need to access error_map & poses in trainer.
+        loader = DataLoader(list(range(size)), batch_size=1, collate_fn=self.collate, shuffle=self.training, num_workers=0)
+        loader._data = self # an ugly fix... we need to access error_map & poses in trainer.
         loader.has_gt = self.images is not None
         return loader
