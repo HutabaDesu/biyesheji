@@ -186,7 +186,7 @@ if __name__ == '__main__':
     parser.add_argument('--radius', type=float, default=5, help="default GUI camera radius from center")
     parser.add_argument('--fovy', type=float, default=50, help="default GUI camera fovy")
     parser.add_argument('--max_spp', type=int, default=1, help="GUI rendering max sample per pixel")
-
+    
     parser.add_argument('--back_file', type=str, help="background images path")
     opt = parser.parse_args()
 
@@ -256,7 +256,7 @@ if __name__ == '__main__':
         assert len(
             train_loader) < opt.ind_num, f"[ERROR] dataset too many frames: {len(train_loader)}, please increase --ind_num to at least this number!"
     scheduler = lambda optimizer: optim.lr_scheduler.LambdaLR(optimizer, lambda iter: 0.01 + 0.99 * (
-            iter / 500) if iter <= 500 else 1 * (0.1 ** ((iter - 500) / (opt.iters - 500))))
+                iter / 500) if iter <= 500 else 1 * (0.1 ** ((iter - 500) / (opt.iters - 500))))
 
     surrogate_model = get_surrogate_model(opt.surrogate_model)
     with open('dataset/imagenet-simple-labels.json', 'r') as file:
