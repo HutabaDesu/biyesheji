@@ -39,29 +39,27 @@ transform = transforms.Compose([
 ])
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 def read_image_to_tensor(folder_path, target_h=None, target_w=None, device='cuda'):
     """
     读取图像并转换为与前景Tensor匹配的格式
     """
     valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff')
-    image_files = [f for f in os.listdir(folder_path)
-                   if f.lower().endswith(valid_extensions)]
+    image_files = [f for f in os.listdir(folder_path) 
+                 if f.lower().endswith(valid_extensions)]
     tensors = []
     for filename in image_files:
         filepath = os.path.join(folder_path, filename)
-        # 使用OpenCV读取图像
+    # 使用OpenCV读取图像
         img = cv2.imread(filepath, cv2.IMREAD_COLOR)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # 调整大小
+    # 调整大小
         if target_h is not None and target_w is not None:
             img = cv2.resize(img, (target_w, target_h))
-        # 转换为Tensor
+    # 转换为Tensor
         img_tensor = torch.from_numpy(img.transpose(2, 0, 1)).float() / 255.0
         img_tensor = img_tensor.unsqueeze(0).to(device)  # 添加batch维度
         tensors.append(img_tensor)
     return tensors
-
 
 def random_rotate_mirror_scale(tensor_img, scale_range=(0.8, 1.4)):
     """
@@ -78,8 +76,7 @@ def random_rotate_mirror_scale(tensor_img, scale_range=(0.8, 1.4)):
     new_H, new_W = int(H * scale), int(W * scale)
     # 使用插值调整大小
     if scale <= 1.0:
-        tensor_img = transforms.functional.resize(tensor_img, [new_H, new_W],
-                                                  interpolation=transforms.functional.InterpolationMode.BILINEAR)
+        tensor_img = transforms.functional.resize(tensor_img, [new_H, new_W], interpolation=transforms.functional.InterpolationMode.BILINEAR)
     # 随机水平翻转
     if random.random() > 0.5:
         tensor_img = transforms.functional.hflip(tensor_img)
@@ -94,7 +91,6 @@ def random_rotate_mirror_scale(tensor_img, scale_range=(0.8, 1.4)):
         # 方法1: 中心裁剪
         tensor_img = transforms.functional.center_crop(tensor_img, [H, W])
     return tensor_img
-
 
 def generate_eot_adversarial_example(x):
     transformed_x = x.clone()
@@ -743,7 +739,7 @@ class Trainer(object):
             if self.log_ptr:
                 print(*args, file=self.log_ptr)
                 self.log_ptr.flush()  # write immediately to file
-
+                
     def blend_tensor_with_background(self, foreground_tensor, threshold=0.86):
         """
         将前景Tensor(白色背景)与背景图像融合
@@ -767,7 +763,7 @@ class Trainer(object):
             C, H, W = original_shape
             foreground_tensor = foreground_tensor.unsqueeze(0)  # 添加batch维度
         # 读取背景图像并转换为Tensor
-        background = random_rotate_mirror_scale(self.backgrounds[random.randint(0, len(self.backgrounds) - 1)])
+        background = random_rotate_mirror_scale(self.backgrounds[random.randint(0,len(self.backgrounds)-1)])
         # 确保背景和前景形状匹配
         if background.shape[2:] != (H, W):
             background = torch.nn.functional.interpolate(background, size=(H, W), mode='bilinear', align_corners=False)
@@ -856,7 +852,7 @@ class Trainer(object):
         # stage 1
         else:
             mvp = data['mvp'].squeeze(0)  # [4, 4]
-            # print(mvp)
+            #print(mvp)
             H, W = data['H'], data['W']
             ifrandom = data['ifrandom']
             outputs = self.model.render_stage1(rays_o, rays_d, ifrandom, mvp, H, W, index=index, bg_color=bg_color,
@@ -890,13 +886,13 @@ class Trainer(object):
             # print('\nNow predicted result is {}'.format(pred_result.indices.item()))
             # loss_adv = 0.1 * criterion(output_all, target_label).mean()
 
-            output_all = self.net(image_predicted.unsqueeze(0))[0].sum(dim=2)[:, -18:]  # 修改
-            # print(output_all)
+            output_all = self.net(image_predicted.unsqueeze(0))[0].sum(dim=2)[:, -18:] #修改
+            #print(output_all)
             pred_result = nn.functional.softmax(output_all, dim=1).topk(1)
             if_attack_success = pred_result.indices.item() == target
             print('\nNow predicted result is {}'.format(pred_result.indices.item()))
             loss_adv = 0.001 * criterion(output_all, target_label).mean()
-            # print(loss_adv)
+            #print(loss_adv)
 
             if gt_mask is not None and self.opt.lambda_mask > 0 and not ifrandom:
                 pred_mask = outputs['weights_sum']
@@ -931,16 +927,16 @@ class Trainer(object):
 
         if self.opt.stage == 1:
             # perceptual loss
-            # if self.opt.lambda_lpips > 0 and not ifrandom:
-            #    loss = loss + self.opt.lambda_lpips * self.criterion_lpips(
-            #        pred_rgb.view(1, H, W, 3).permute(0, 3, 1, 2).contiguous(),
-            #        gt_rgb.view(1, H, W, 3).permute(0, 3, 1, 2).contiguous())
+            if self.opt.lambda_lpips > 0 and not ifrandom:
+                loss = loss + self.opt.lambda_lpips * self.criterion_lpips(
+                    pred_rgb.view(1, H, W, 3).permute(0, 3, 1, 2).contiguous(),
+                    gt_rgb.view(1, H, W, 3).permute(0, 3, 1, 2).contiguous())
 
-            # original_vertices = torch.unsqueeze(self.model.vertices, 0)
-            # adv_vertices = torch.unsqueeze(self.model.vertices + self.model.vertices_offsets, 0)
-            # loss_chamfer, _ = chamfer_distance(original_vertices, adv_vertices)
-            # loss = loss + self.opt.lambda_cd * loss_chamfer
-            # print("loss_chamfer:{}".format(loss_chamfer))
+            original_vertices = torch.unsqueeze(self.model.vertices, 0)
+            adv_vertices = torch.unsqueeze(self.model.vertices + self.model.vertices_offsets, 0)
+            loss_chamfer, _ = chamfer_distance(original_vertices, adv_vertices)
+            loss = loss + self.opt.lambda_cd * loss_chamfer
+            print("loss_chamfer:{}".format(loss_chamfer))
 
             # smoothness
             _mesh = None
