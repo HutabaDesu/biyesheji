@@ -31,9 +31,10 @@ python generate_3d_adv_yolo.py \
     --scale 0.25 \
     --dt_gamma 0 \
     --lambda_lap 1e-2 \
-    --lambda_cd 3000 \
-    --lambda_edgelen 1e-2 \
-    --back_file "/home/featurize/TT3D/background/background1"\
+    --lambda_cd 6000000 \
+    --lambda_edgelen 2e-2 \
+    --back_file "/home/featurize/TT3D/background/background2"\
+    --iters 30000\
     --stage 1 > logs/adv_optimization/${OBJECT_NAME}_temp.log 2>&1
 echo "3D adversarial optimization completed."
 
