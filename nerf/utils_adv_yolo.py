@@ -740,7 +740,7 @@ class Trainer(object):
                 print(*args, file=self.log_ptr)
                 self.log_ptr.flush()  # write immediately to file
                 
-    def blend_tensor_with_background(self, foreground_tensor, threshold=0.86):
+    def blend_tensor_with_background(self, foreground_tensor, threshold=0.99):
         """
         将前景Tensor(白色背景)与背景图像融合
         参数:
@@ -771,7 +771,7 @@ class Trainer(object):
         if C == 1:  # 灰度图
             white_mask = (foreground_tensor > threshold).squeeze(1)
         else:  # 彩色图
-            white_mask = (foreground_tensor.min(dim=1)[0] > threshold)  # 所有通道都大于阈值
+            white_mask = (foreground_tensor.min(dim=1)[0] >= threshold)  # 所有通道都大于阈值
         # 创建输出Tensor
         output = foreground_tensor.clone()
         # 在白色区域使用背景图像
