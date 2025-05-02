@@ -24,8 +24,10 @@ echo "Starting 3D adversarial optimization for $OBJECT_NAME..."
 python generate_3d_adv_yolo.py \
     $METADATA_PATH/ \
     --workspace $WORKSPACE_PATH \
-    --target_label 1 \
+    --target_label 8 \
     --surrogate_model yolov8 \
+    --nc 80 \
+    --task 1 \
     -O \
     --bound 1 \
     --scale 0.25 \
