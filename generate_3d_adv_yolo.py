@@ -7,7 +7,8 @@ from ultralytics import YOLO
 
 from nerf.utils_adv_yolo import *
 from nerf.network_adv import NeRFNetwork
-from nerf.provider_adv_yolo import NeRFDataset
+from nerf.provider_adv import NeRFDataset as data1
+from nerf.provider_adv_yolo import NeRFDataset as data2
 
 
 class NormalizeByChannelMeanStd(torch.nn.Module):
@@ -24,7 +25,7 @@ class NormalizeByChannelMeanStd(torch.nn.Module):
 def get_surrogate_model(model_name):
     resnet101 = model_load.resnet101(pretrained=True)
     densenet121 = model_load.densenet121(pretrained=True)
-    yolov8 = YOLO("last.pt").model
+    yolov8 = YOLO("yolov8n.pt").model
     print(yolov8)
     networks = {
         'resnet': resnet101,
@@ -188,6 +189,9 @@ if __name__ == '__main__':
     parser.add_argument('--max_spp', type=int, default=1, help="GUI rendering max sample per pixel")
     
     parser.add_argument('--back_file', type=str, help="background images path")
+    parser.add_argument('--nc', type=int, default=80, help="num of classes")
+    parser.add_argument('--task', type=int, default=1, help="the task of optimization")
+    
     opt = parser.parse_args()
 
     opt.cuda_ray = True
@@ -244,9 +248,12 @@ if __name__ == '__main__':
 
     optimizer = lambda model: torch.optim.Adam(model.get_params(opt.lr), eps=1e-15)
     print('The number of params: {}'.format(len((model.get_params(opt.lr)))))
-
-    train_loader = NeRFDataset(opt, device=device, type=opt.train_split).dataloader()
-
+    
+    if opt.task == 1:
+        train_loader = data1(opt, device=device, type=opt.train_split).dataloader()
+    elif opt.task == 2:
+        train_loader = data2(opt, device=device, type=opt.train_split).dataloader()
+        
     max_epoch = np.ceil(opt.iters / len(train_loader)).astype(np.int32)
     save_interval = max(1, max_epoch // max(opt.n_ckpt, 1))
     eval_interval = max(1, max_epoch // max(opt.n_eval, 1))
@@ -278,7 +285,11 @@ if __name__ == '__main__':
                       fp16=opt.fp16, \
                       lr_scheduler=scheduler, scheduler_update_every_step=True, use_checkpoint=opt.ckpt,
                       eval_interval=eval_interval, save_interval=save_interval)
-    valid_loader = NeRFDataset(opt, device=device, type='val').dataloader()
+    if opt.task == 1:
+        valid_loader = data1(opt, device=device, type='val').dataloader()
+    elif opt.task == 2:
+        valid_loader = data2(opt, device=device, type='val').dataloader()
+        
     trainer.metrics = [PSNRMeter(), ]
     trainer.train(train_loader, valid_loader, max_epoch)
 
@@ -287,7 +298,11 @@ if __name__ == '__main__':
     trainer.evaluate(valid_loader)
 
     # also test
-    test_loader = NeRFDataset(opt, device=device, type='test').dataloader()
+    if opt.task == 1:
+        test_loader = data1(opt, device=device, type='test').dataloader()
+    elif opt.task == 2:    
+        test_loader = data2(opt, device=device, type='test').dataloader()
+        
     if test_loader.has_gt:
         trainer.evaluate(test_loader)  # blender has gt, so evaluate it.
     trainer.test(test_loader, write_video=True)  # test and save video
