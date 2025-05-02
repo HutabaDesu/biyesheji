@@ -886,7 +886,7 @@ class Trainer(object):
             # print('\nNow predicted result is {}'.format(pred_result.indices.item()))
             # loss_adv = 0.1 * criterion(output_all, target_label).mean()
 
-            output_all = self.net(image_predicted.unsqueeze(0))[0].sum(dim=2)[:, -18:] #修改
+            output_all = self.net(image_predicted.unsqueeze(0))[0].sum(dim=2)[:, -self.opt.nc:] #修改
             #print(output_all)
             pred_result = nn.functional.softmax(output_all, dim=1).topk(1)
             if_attack_success = pred_result.indices.item() == target
