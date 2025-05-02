@@ -874,8 +874,10 @@ class Trainer(object):
             criterion = torch.nn.CrossEntropyLoss()
             target = self.target
             target_label = torch.LongTensor([target]).to(device)
-
-            image_predicted = self.blend_tensor_with_background(pred_image.permute(2, 0, 1))
+            if self.opt.task == 1:
+                image_predicted = pred_image.permute(2, 0, 1)
+            elif self.opt.task == 2:
+                image_predicted = self.blend_tensor_with_background(pred_image.permute(2, 0, 1))
             save_image(image_predicted, 'no_eot.png')
             # eot_image = generate_eot_adversarial_example(image_predicted).unsqueeze(0)
             # save_image(eot_image, 'eot.png')
