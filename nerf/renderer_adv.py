@@ -978,7 +978,7 @@ class NeRFRenderer(nn.Module):
         alphas = mask.float()
         
         alphas = dr.antialias(alphas, rast, vertices_clip, self.triangles, pos_gradient_boost=self.opt.pos_gradient_boost).squeeze(0).clamp(0, 1)
-        rgbs = dr.antialias(rgbs, rast, vertices_clip, self.f, pos_gradient_boost=self.opt.pos_gradient_boost).squeeze(0).clamp(0, 1)
+        rgbs = dr.antialias(rgbs, rast, vertices_clip, self.triangles, pos_gradient_boost=self.opt.pos_gradient_boost).squeeze(0).clamp(0, 1)
 
         image = alphas * rgbs 
         depth = alphas * rast[0, :, :, [2]]
