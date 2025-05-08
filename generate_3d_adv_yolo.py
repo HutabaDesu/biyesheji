@@ -2,6 +2,7 @@ import pdb
 import json
 import torch
 import argparse
+import copy
 from torchvision import models as model_load
 from ultralytics import YOLO
 
@@ -25,8 +26,8 @@ class NormalizeByChannelMeanStd(torch.nn.Module):
 def get_surrogate_model(model_name):
     resnet101 = model_load.resnet101(pretrained=True)
     densenet121 = model_load.densenet121(pretrained=True)
-    yolov8 = YOLO("yolov8n.pt").model
-    print(yolov8)
+    yolov8 = YOLO("v8s_55e_last.pt").model
+    #print(yolov8)
     networks = {
         'resnet': resnet101,
         'densenet': densenet121,
@@ -217,7 +218,7 @@ if __name__ == '__main__':
         opt.enable_offset_nerf_grad = True  # lead to more sharp texture
 
         # just perform remesh periodically
-        opt.refine_decimate_ratio = 0  # disable decimation
+        opt.refine_decimate_ratio = 0  # disable decimationlambda
         opt.refine_size = 0  # disable subdivision
 
     if opt.contract:
@@ -240,9 +241,11 @@ if __name__ == '__main__':
 
     # convert ratio to steps
     opt.refine_steps = [int(round(x * opt.iters)) for x in opt.refine_steps_ratio]
+    
     # seed_everything(opt.seed)
     model = NeRFNetwork(opt)
-
+    model2 = NeRFNetwork(opt).eval()
+    
     criterion = torch.nn.MSELoss(reduction='none')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -280,7 +283,7 @@ if __name__ == '__main__':
             exit(1)
     print(f'We are attacking object towards {target}:{imagenet_labels[target]}')
 
-    trainer = Trainer('ngp', opt, surrogate_model, model, target, device=device, workspace=opt.workspace,
+    trainer = Trainer('ngp', opt, surrogate_model, model, model2, target, device=device, workspace=opt.workspace,
                       optimizer=optimizer, criterion=criterion, ema_decay=0.95 if opt.stage == 0 else None,
                       fp16=opt.fp16, \
                       lr_scheduler=scheduler, scheduler_update_every_step=True, use_checkpoint=opt.ckpt,
