@@ -24,10 +24,10 @@ echo "Starting 3D adversarial optimization for $OBJECT_NAME..."
 python generate_3d_adv_yolo.py \
     $METADATA_PATH/ \
     --workspace $WORKSPACE_PATH \
-    --target_label 8 \
+    --target_label 1 \
     --surrogate_model yolov8 \
-    --nc 80 \
-    --task 1 \
+    --nc 18 \
+    --task 2 \
     -O \
     --bound 1 \
     --scale 0.25 \
@@ -36,7 +36,7 @@ python generate_3d_adv_yolo.py \
     --lambda_cd 6000000 \
     --lambda_edgelen 2e-2 \
     --back_file "/home/featurize/TT3D/background/background2"\
-    --iters 30000\
+    --iters 20000\
     --stage 1 > logs/adv_optimization/${OBJECT_NAME}_temp.log 2>&1
 echo "3D adversarial optimization completed."
 
