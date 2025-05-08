@@ -579,6 +579,7 @@ class Trainer(object):
                  opt,  # extra conf
                  net,  # classifer
                  model,  # network
+                 model2,
                  target,  # attack target
                  criterion=None,  # loss function, if None, assume inline implementation in train_step
                  optimizer=None,  # optimizer
@@ -631,10 +632,12 @@ class Trainer(object):
         self.backgrounds = read_image_to_tensor(self.opt.back_file, 400, 400)
 
         model.to(self.device)
+        model2.to(self.device)
         if self.world_size > 1:
             model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
             model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[local_rank])
         self.model = model
+        self.model2 = model2
         if isinstance(criterion, nn.Module):
             criterion.to(self.device)
         self.criterion = criterion
@@ -857,13 +860,18 @@ class Trainer(object):
             ifrandom = data['ifrandom']
             outputs = self.model.render_stage1(rays_o, rays_d, ifrandom, mvp, H, W, index=index, bg_color=bg_color,
                                                shading=shading, **vars(self.opt))
+            outputs2 = self.model2.render_stage1(rays_o, rays_d, ifrandom, mvp, H, W, index=index, bg_color=bg_color,
+                                               shading=shading, **vars(self.opt))
             pred_rgb = outputs['image']
-
+            save_image(pred_rgb.reshape(H, W, 3).permute(2, 0, 1), 'pred_rgb.png')
+            pred_rgb2 = outputs2['image']
+            #print(pred_rgb.reshape(H, W, 3).permute(2, 0, 1))
+            #print(pred_rgb2.reshape(H, W, 3).permute(2, 0, 1))
+            save_image(pred_rgb2.reshape(H, W, 3).permute(2, 0, 1), 'pred_rgb2.png')
             if ifrandom:
-                loss_rgb = 0
+                loss_rgb = self.opt.lambda_rgb * self.criterion(pred_rgb, pred_rgb2).mean(-1)  # [H, W]
             else:
                 loss_rgb = self.opt.lambda_rgb * self.criterion(pred_rgb, gt_rgb).mean(-1)  # [H, W]
-
             # loss_adv
             resize_transform = Resize((224, 224))
             pred_image = outputs['image'].reshape(H, W, 3)
@@ -901,7 +909,8 @@ class Trainer(object):
                 loss_mask = self.opt.lambda_mask * self.criterion(pred_mask.view(-1), gt_mask.view(-1))
 
         if ifrandom:
-            loss = loss_adv
+            loss = loss_rgb.mean() + loss_adv
+            print('loss_rgb: {}'.format(loss_rgb.mean()))
             print('loss_adv: {}'.format(loss_adv))
         else:
             loss = loss_rgb.mean() + loss_mask.mean() + loss_adv
@@ -1643,10 +1652,12 @@ class Trainer(object):
 
         if 'model' not in checkpoint_dict:
             self.model.load_state_dict(checkpoint_dict)
+            self.model2.load_state_dict(checkpoint_dict)
             self.log("[INFO] loaded model.")
             return
 
         missing_keys, unexpected_keys = self.model.load_state_dict(checkpoint_dict['model'], strict=False)
+        missing_keys, unexpected_keys = self.model2.load_state_dict(checkpoint_dict['model'], strict=False)
         self.log("[INFO] loaded model.")
         if len(missing_keys) > 0:
             self.log(f"[WARN] missing keys: {missing_keys}")
@@ -1663,6 +1674,9 @@ class Trainer(object):
         if self.model.cuda_ray:
             if 'mean_density' in checkpoint_dict:
                 self.model.mean_density = checkpoint_dict['mean_density']
+        if self.model2.cuda_ray:
+            if 'mean_density' in checkpoint_dict:
+                self.model2.mean_density = checkpoint_dict['mean_density']
 
         if model_only:
             return
